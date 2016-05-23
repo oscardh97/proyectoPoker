@@ -18,14 +18,15 @@ bool tieneTrio(int**);
 bool tieneFullColor(int**);
 bool tienePoker(int**);
 char getValueChar(int );
-void ordenarMesa(int**, const unsigned int);
+void ordenarMesa(int**, const int);
 void imprimirCarta(int, char, char[20][27] = NULL);
-void imprimirOpciones();
+void imprimirOpciones(bool = false);
 void imprimirMensaje(char[]);
-void imprimirDinero(int);
+void imprimirDinero(int, int);
 int pedirDatos(char*, bool);
 bool indexOf(int*, int, int);
-void copiarMatriz(int**, int** const, unsigned const int, unsigned const int);
+void liberarMemoriaMesa(int**);
+void copiarMatriz(int**, int** const, const int, const int);
 int main(){
 	srand(time(NULL));
 	int** mesa = NULL; 
@@ -36,29 +37,40 @@ int main(){
 	init_pair(1,COLOR_WHITE,COLOR_RED);
 	init_pair(2,COLOR_WHITE,COLOR_BLACK);
 	iniciarMesa(mesa, cartasCongeladas);
-	char mensaje[] = "¿Desea jugar con trampa? S/N";
+	char mensaje[] = "Desea jugar con trampa? S/N";
 	imprimirMensaje(mensaje);
 	char esTramposo = getch();
 	strcpy(mensaje, "¿Ingrese la cantidad de dinero?");
 	imprimirMensaje(mensaje);
 	char input[100];
 	int dinero = pedirDatos(input, true);
-	imprimirDinero(dinero);
+	int apuesta = 0;
+	imprimirDinero(dinero, apuesta);
 	int codigoTrampa = 0;
 	while(true){
-		char c = '0';
+		char caracter = '0';
 		if(esTramposo == 's' || esTramposo == 'S'){
-			strcpy(mensaje, "Ingrese el codigo tramposo. Ver lista ->");
+			imprimirOpciones(true);
+			strcpy(mensaje, "Ingrese el codigo tramposo. Ver lista ----->>");
 			imprimirMensaje(mensaje);
 			codigoTrampa = (int)(getch() - '0');
 		}
 		strcpy(mensaje, "Ingrese la cantidad a apostar");
 		imprimirMensaje(mensaje);
-		pedirDatos(input, false);
-		// strcpy(mensaje, input);
-		imprimirOpciones();
+		do{
+			apuesta = pedirDatos(input, true);
+			if(apuesta > dinero || apuesta <= 0){
+				strcpy(mensaje, "La apuesta debe ser menor al dinero disponible y mayor a cero");
+				imprimirMensaje(mensaje);
+				refresh();
+			}else{
+				break;
+			}
+		}while(1);
+		dinero -= apuesta;
+		imprimirDinero(dinero, apuesta);
 		revolver(mesa, codigoTrampa, cartasCongeladas);
-		strcpy(mensaje, "Ingrese las cartas que dejara");
+		strcpy(mensaje, "Ingrese las cartas que desea congelar");
 		imprimirMensaje(mensaje);
 		int cartasACongelar = pedirDatos(input, false);
 		int contadorCartas = 0;
@@ -67,13 +79,24 @@ int main(){
 			contadorCartas++;
 		}
 		revolver(mesa, codigoTrampa, cartasCongeladas);
-		tieneJuego(mesa);
-		c = getch();
+		dinero += tieneJuego(mesa) * apuesta;
+		apuesta = 0;
+		imprimirDinero(dinero, apuesta);
+		strcpy(mensaje, "\tDesea continuar? S/N");
+		imprimirMensaje(mensaje);
+		caracter = getch();
+		if(caracter != 's' && caracter != 'S'){
+			break;
+		}
 		iniciarMesa(mesa, cartasCongeladas);
 		refresh();
 	}
 	endwin();
+	for(int i = 0; i < 5; i++){
+		delete[] mesa[i];
+	}
 	delete[] mesa;
+	delete[] cartasCongeladas;
 	return 0;
 }
 int pedirDatos(char* input, bool esEntero){
@@ -81,10 +104,15 @@ int pedirDatos(char* input, bool esEntero){
 		input[i] = -1;
 	}
 	int contadorTeclas = 0;
+	noecho();
 	char caracter = getch();
 	while(caracter != '\n'){
-		input[contadorTeclas] = caracter;
-		contadorTeclas++;
+		noecho();
+		if(caracter >= 48 && caracter <= 57){
+			addch(caracter);
+			input[contadorTeclas] = caracter;
+			contadorTeclas++;
+		}
 		caracter = getch();
 	}
 	if(esEntero){
@@ -96,28 +124,40 @@ int pedirDatos(char* input, bool esEntero){
 	}
 	return contadorTeclas;
 }
-void imprimirDinero(int dinero){
-	move(2, 25);
+void imprimirDinero(int dinero, int apuesta){
+
+	attrset (COLOR_PAIR(2));
+	for(int i = 25; i < 150; i++){
+		move(2, i);
+		printw("%c", ' ');
+	}
+	move(2, 28);
 	printw("%d", dinero);
-	
+	move(2, 133);
+	printw("%d", apuesta);
+	move(40,80);
 }
 void imprimirMensaje(char mensaje[]){
-	move(35,60);
-	addstr("----------------------------------------");
-	for(int i = 60; i < 150; i++){
+
+	attrset (COLOR_PAIR(2));
+	move(35,55);
+	addstr("-------------------------------------------------------");
+	move(37,49);
+	for(int i = 50; i < 125; i++){
 		move(37, i);
 		printw(" ");
 		move(40, i);
 		printw(" ");
 	}
-	move(37,60);
-	addstr("\t");
+	// move(37,55);
+	// addstr("\t");
+	move(37,67);
 	addstr(mensaje);
-	move(39,60);
-	addstr("----------------------------------------");
-	move(41,60);
-	addstr("----------------------------------------");
-	move(40,76);
+	move(39,55);
+	addstr("-------------------------------------------------------");
+	move(41,55);
+	addstr("-------------------------------------------------------");
+	move(40,80);
 }
 /**
 	codigoTrampa:{ 
@@ -171,6 +211,9 @@ void revolver(int** mesa, int codigoTrampa, int* cartasCongeladas){
 			}else if(codigoTrampa >= 4 && codigoTrampa <= 7){
 				numeroCarta = numeros[i];
 				palo = rand() % 3 + 1;
+				if(codigoTrampa == 6){
+					palo = i;
+				}
 			}else{
 				numeroCarta = rand() % 13 + 1;
 				palo = codigoTrampa != 8 ? rand() % 3 + 1 : palo;
@@ -186,11 +229,11 @@ void revolver(int** mesa, int codigoTrampa, int* cartasCongeladas){
 			}else{
 				crearMapaTrebol(charCarta, i);
 			}
-		}while(sobreMesa(mesa, palo, numeroCarta) && codigoTrampa == 0);
+		}while(sobreMesa(mesa, palo, numeroCarta) && (codigoTrampa == 0));
 		propiedades[0] = palo;
 		propiedades[1] = numeroCarta;
 	}
-		delete[] numeros;
+	delete[] numeros;
 }
 bool indexOf(int* arreglo, int elemento, int tamanio){
 	for(int i = 0; i < tamanio; i++){
@@ -222,6 +265,8 @@ char getValueChar(int numeroCarta){
 	Inicia las propiedades de todas las cartas de la mesa. Les asigna palo = -1 y numero de carta = -1
 */
 void iniciarMesa(int** mesa, int* cartasCongeladas){
+	move(4,70);
+	addstr("                        ");
 	for(int k = 0; k < 5; k++){
 		int* propiedades = new int[2];
 		propiedades[0] = -1;
@@ -247,33 +292,64 @@ bool sobreMesa(int** mesa, int palo, int codigoCarta){
 	Comprueba la mano que tiene, en caso de tener retorna el valor por el cual hay que multiplicar la apuesta
 */
 int tieneJuego(int** mesa){
+// 	Par Jack o mejor	*1		+
+// Dos Pares			*2		+-
+// Trio				*3		+
+// Escalera			*4		+
+// Mismo Mejor			*5
+// Full House			*9
+// Cuatro Iguales		*25
+// Escalera Mejor		*50		+
+// Escalera Final		*250
+
+	attrset (COLOR_PAIR(2));
+	move(5, 25);
 	int escalera = tieneEscalera(mesa);
+	int pares = hayPares(mesa);
 	move(3,70);
 	addstr("------------------------");
 	move(5,70);
 	addstr("------------------------");
 	move(4,70);
-	addstr("------------------------");
+	for(int i = 70; i < 90; i++){
+		move(4, i);
+		printw(" ");
+	}
+	// addstr("------------------------");
 	move(4,76);
 	if(escalera){
 		if(escalera == 1){
 			addstr("ESCALERA DE COLOR");
+			return 50;
 		}else if(escalera == 2){
 			addstr("ESCALERA NORMAL");
+			return 4;
 		}else{
 			addstr("ESCALERA REAL");
+			return 250;
 		}
 	}else if(tienePoker(mesa)){
 		addstr("TIENE POKER");
+		return 25;
 	}else if(tieneFullHouse(mesa)){
 		addstr("TIENE FULL HOUSE");
+		return 9;
 	}else if(tieneFullColor(mesa)){
 		addstr("TIENE FULL COLOR");
+		return 5;
 	}else if(tieneTrio(mesa)){
 		addstr("TIENE TRIO");
-	}else if(hayPares(mesa)){
-		addstr("Hay pares");
+		return 3;
+	}else if(pares){
+		if(pares == 1){
+			addstr("HAY PAR");
+			return 1;
+		}else{
+			addstr("HAY DOS PARES");
+			return 2;
+		}
 	}
+	return 0;
 }
 int hayPares(int** mesa){
 	int** mesaOrdenada = new int*[5];
@@ -290,7 +366,14 @@ int hayPares(int** mesa){
 			i++;
 		}
 	}
+	liberarMemoriaMesa(mesaOrdenada);
 	return cantidadPares == 1 ? esReal : cantidadPares;
+}
+void liberarMemoriaMesa(int** mesa){
+	for(int i = 0; i < 5; i++){
+		delete[] mesa[i];
+	}
+	delete[] mesa;
 }
 bool tieneFullColor(int** mesa){
 	int color = mesa[0][0];
@@ -304,20 +387,18 @@ bool tieneFullColor(int** mesa){
 bool tienePoker(int** mesa){
 	int** mesaOrdenada = new int*[5];
 	copiarMatriz(mesaOrdenada, mesa, 5, 2);
-	ordenarMesa(mesaOrdenada, 5);
-	bool tiene = 1;
+	ordenarMesa(mesaOrdenada, 5);	
 	for(int i = 0; i < 2; i++){
-		for(int j = i + 1; j < 5; j++){
-			if(mesaOrdenada[i][1] != mesaOrdenada[j][1]){
-				tiene = 0;
-				break;
-			}
+		if(mesaOrdenada[i][1] == mesaOrdenada[i + 3][1]){
+			return 1;
 		}
 	}
-	return tiene;
+	liberarMemoriaMesa(mesaOrdenada);
+	return 0;
 }
 bool tieneFullHouse(int** mesa){
 	int** mesaOrdenada = new int*[5];
+	copiarMatriz(mesaOrdenada, mesa, 5, 2);
 	copiarMatriz(mesaOrdenada, mesa, 5, 2);
 	ordenarMesa(mesaOrdenada, 5);
 	if(mesaOrdenada[0][1] == mesaOrdenada[1][1]){
@@ -327,6 +408,7 @@ bool tieneFullHouse(int** mesa){
 			return mesaOrdenada[2][1] == mesaOrdenada[3][1] && mesaOrdenada[2][1] == mesaOrdenada[4][1]; 
 		}
 	}
+	liberarMemoriaMesa(mesaOrdenada);
 	return 0;
 }
 bool tieneTrio(int** mesa){
@@ -338,6 +420,7 @@ bool tieneTrio(int** mesa){
 			return 1;
 		}
 	}
+	liberarMemoriaMesa(mesaOrdenada);
 	return 0;
 }
 int tieneEscalera(int** mesa){
@@ -353,9 +436,11 @@ int tieneEscalera(int** mesa){
 		}
 		tipo = tipo == 1 && mesaOrdenada[i][0] == mesaOrdenada[i + 1][0] ? 1 : 2; 
 	}
-	return tipo == 1 && mesaOrdenada[1][1] == 10 && mesaOrdenada[0][1] == 1 ? 3 : tipo;
+	tipo = tipo == 1 && mesaOrdenada[1][1] == 10 && mesaOrdenada[0][1] == 1 ? 3 : tipo;
+	liberarMemoriaMesa(mesaOrdenada);
+	return tipo;
 }
-void ordenarMesa(int** matriz, const unsigned int tamanioMatriz){
+void ordenarMesa(int** matriz, const int tamanioMatriz){
 	int valorMayor, paloMayor;
 	for(int i = 0; i < tamanioMatriz; i++){
 		for(int j = 0; j < tamanioMatriz -1; j++){
@@ -370,13 +455,12 @@ void ordenarMesa(int** matriz, const unsigned int tamanioMatriz){
 		}
 	}
 }
-void copiarMatriz(int** matrizDestino, int** const matrizOriginal, const unsigned int tamanioMatriz, const unsigned int tamanioHijos){
+void copiarMatriz(int** matrizDestino, int** const matrizOriginal, const int tamanioMatriz, const int tamanioHijos){
 	for(int i = 0; i < tamanioMatriz; i++){
-		// for(int k = 0; k < tamanioHijos; k++){
-		// 	matrizDestino[i][k] = 
-		// }
 		matrizDestino[i] = new int[tamanioHijos];
-		for(int j = 0; matrizDestino[i][j] = matrizOriginal[i][j]; j++);
+		for(int j = 0; j < tamanioHijos; j++){
+			matrizDestino[i][j] = matrizOriginal[i][j];
+		}
 	}
 }
 void crearMapaCorazon(char numeroCarta, int posicion){
@@ -525,9 +609,10 @@ void imprimirCarta(int posicion, char numeroCarta, char mapa[20][27]){
 		// printw(" | ");
 	}
 }
-void imprimirOpciones(){
+void imprimirOpciones(bool esTramposo){
 	attrset (COLOR_PAIR(2));
-	for(int i = 5; i <= 30; i++){
+	for(int i = 5; i <= 37; i++){
+		/**BORDES DEL PANEL**/
 		move(33, i);
 		printw("-");
 		move(35, i);
@@ -536,52 +621,60 @@ void imprimirOpciones(){
 		printw("-");
 		move(46, i);
 		printw("-");
+		/**BORDES DINERO**/
 		move(0, i + 10);
 		printw("-");
 		move(4, i + 10);
 		printw("-");
 		move(6, i + 10);
 		printw("-");
-		move(0, i + 118);
+		/**BORDES APUESTA**/
+		move(0, i + 113);
 		printw("-");
-		move(4, i + 118);
+		move(4, i + 113);
 		printw("-");
-		move(6, i + 118);
+		move(6, i + 113);
 		printw("-");
 	}
-// 	Par Jack o mejor	*1		+
-// Dos Pares			*2		+-
-// Trio				*3		+
-// Escalera			*4		+
-// Mismo Mejor			*5
-// Full House			*9
-// Cuatro Iguales		*25
-// Escalera Mejor		*50		+
-// Escalera Final		*250
-	move(5, 25);
+	move(5, 29);
 	printw("Dinero");
-	move(5, 133	);
+	move(5, 132	);
 	printw("Apuesta");
 	move(34, 5);
 	printw("|\tPosibles Manos");
-	move(34, 30);
+	move(34, 37);
 	printw("|");
 	char panelOpciones[9][25] = {
-		"Par\t\tx 1",
-		"Doble par\tx 2",
-		"Trio\t\tx 3",
-		"Escalera\t\tx 4",
-		"Mismo Mejor\tx 5",
-		"Full House\tx 9",
-		"Cuatro Iguales\tx 25",
-		"Escalera Mejor\tx 50",
-		"Escalera Final\tx 250",
+		"1. Par\t\t\tx 1",
+		"2. Doble par\t\tx 2",
+		"3. Trio\t\t\tx 3",
+		"4. Escalera\t\tx 4",
+		"5. Mismo Mejor\t\tx 5",
+		"6. Full House\t\tx 9",
+		"7. Cuatro Iguales\tx 25",
+		"8. Escalera Mejor\tx 50",
+		"9. Escalera Final\tx 250",
+	};
+	char panelTrampa[9][25] = {
+		"1. Escalera",
+		"2. Escalera de Color",
+		"3. Escalera Real",
+		"4. Doble Par",
+		"5. Full House",
+		"6. Mismo Mejor",
+		"7. Trio",
+		"8. Full Color",
+		"9. Par",
 	};
 	for(int i = 0; i < 9; i++){
 		move(36 + i, 5);
 		printw("| ");
 		printw(panelOpciones[i]);
-		move(36 + i, 30);
+		move(36 + i, 37);
 		printw("|");
+		if(esTramposo){
+			move(35 + i, 130);
+			printw(panelTrampa[i]);
+		}
 	}
 }
