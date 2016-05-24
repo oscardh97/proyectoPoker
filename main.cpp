@@ -3,12 +3,15 @@
 #include <ctime>
 #include <cstring>
 #include <cmath>
+#include <iostream>
+#include <fstream>
+using namespace std;
 void iniciarMesa(int**, int*);
 void crearMapaCorazon(char ,int);
 void crearMapaEspada(char ,int);
 void crearMapaDiamante(char ,int);
 void crearMapaTrebol(char ,int);
-void revolver(int*[], int, int*);
+void revolver(int*[], int, int*, bool);
 int tieneJuego(int*[]);
 int tieneEscalera(int**);
 bool tieneFullHouse(int**);
@@ -32,6 +35,10 @@ int main(){
 	int** mesa = NULL; 
 	mesa = new int*[5];
 	int* cartasCongeladas = new int[5];
+	char input[100];
+	int dinero, apuesta = 0, codigoTrampa = 0;
+	char caracter;
+	/**Iniciar Pantalla**/
 	initscr();
 	start_color();
 	init_pair(1,COLOR_WHITE,COLOR_RED);
@@ -40,15 +47,31 @@ int main(){
 	char mensaje[] = "Desea jugar con trampa? S/N";
 	imprimirMensaje(mensaje);
 	char esTramposo = getch();
-	strcpy(mensaje, "¿Ingrese la cantidad de dinero?");
-	imprimirMensaje(mensaje);
-	char input[100];
-	int dinero = pedirDatos(input, true);
-	int apuesta = 0;
+	/**Cargar dinero del archivo*/
+	ifstream archivoEntrada;
+	if(ifstream("dinero.txt")){
+		archivoEntrada.open("dinero.txt");
+		archivoEntrada >> dinero;
+	}else{
+		dinero = 0;
+	}
 	imprimirDinero(dinero, apuesta);
-	int codigoTrampa = 0;
+	archivoEntrada.close();
+	
 	while(true){
-		char caracter = '0';
+		if(dinero != 0){
+			strcpy(mensaje, "Desea modificar la cantidad de dinero? S/N");
+			imprimirMensaje(mensaje);
+			caracter = getch();
+		}else{
+			caracter = 's';
+		}
+		if(caracter == 's' || caracter == 'S'){
+			strcpy(mensaje, "Ingrese la cantidad de dinero?");
+			imprimirMensaje(mensaje);
+			dinero = pedirDatos(input, true);
+			imprimirDinero(dinero, apuesta);
+		}
 		if(esTramposo == 's' || esTramposo == 'S'){
 			imprimirOpciones(true);
 			strcpy(mensaje, "Ingrese el codigo tramposo. Ver lista ----->>");
@@ -60,7 +83,7 @@ int main(){
 		do{
 			apuesta = pedirDatos(input, true);
 			if(apuesta > dinero || apuesta <= 0){
-				strcpy(mensaje, "La apuesta debe ser menor al dinero disponible y mayor a cero");
+				strcpy(mensaje, "La apuesta debe estar entre dinero disponible y mayor a cero");
 				imprimirMensaje(mensaje);
 				refresh();
 			}else{
@@ -69,7 +92,7 @@ int main(){
 		}while(1);
 		dinero -= apuesta;
 		imprimirDinero(dinero, apuesta);
-		revolver(mesa, codigoTrampa, cartasCongeladas);
+		revolver(mesa, codigoTrampa, cartasCongeladas, false);
 		strcpy(mensaje, "Ingrese las cartas que desea congelar");
 		imprimirMensaje(mensaje);
 		int cartasACongelar = pedirDatos(input, false);
@@ -78,14 +101,22 @@ int main(){
 			cartasCongeladas[contadorCartas] = (int)(input[i]- '0') - 1;
 			contadorCartas++;
 		}
-		revolver(mesa, codigoTrampa, cartasCongeladas);
+		revolver(mesa, codigoTrampa, cartasCongeladas, true);
 		dinero += tieneJuego(mesa) * apuesta;
 		apuesta = 0;
 		imprimirDinero(dinero, apuesta);
+		if(dinero == 0 ){
+			strcpy(mensaje, "Usted ha quedado en la ruina! Presione una tecla");	
+			imprimirMensaje(mensaje);
+			getch();
+		}
 		strcpy(mensaje, "\tDesea continuar? S/N");
 		imprimirMensaje(mensaje);
 		caracter = getch();
-		if(caracter != 's' && caracter != 'S'){
+		if(caracter != '\n' && caracter != 's' && caracter != 'S'){
+			strcpy(mensaje, "Visitanos: http://fia.unitec.edu/wiki/index.php/11511308,OSCAR_DAVID_DIAZ_HERNANDEZ");
+			imprimirMensaje(mensaje);
+			getch();
 			break;
 		}
 		iniciarMesa(mesa, cartasCongeladas);
@@ -125,6 +156,10 @@ int pedirDatos(char* input, bool esEntero){
 	return contadorTeclas;
 }
 void imprimirDinero(int dinero, int apuesta){
+	ofstream archivoSalida;
+	archivoSalida.open("dinero.txt");
+	archivoSalida << dinero;
+	archivoSalida.close();
 
 	attrset (COLOR_PAIR(2));
 	for(int i = 25; i < 150; i++){
@@ -141,9 +176,9 @@ void imprimirMensaje(char mensaje[]){
 
 	attrset (COLOR_PAIR(2));
 	move(35,55);
-	addstr("-------------------------------------------------------");
+	addstr("---------------------------------------------------------------");
 	move(37,49);
-	for(int i = 50; i < 125; i++){
+	for(int i = 50; i < 127	; i++){
 		move(37, i);
 		printw(" ");
 		move(40, i);
@@ -154,9 +189,9 @@ void imprimirMensaje(char mensaje[]){
 	move(37,67);
 	addstr(mensaje);
 	move(39,55);
-	addstr("-------------------------------------------------------");
+	addstr("---------------------------------------------------------------");
 	move(41,55);
-	addstr("-------------------------------------------------------");
+	addstr("---------------------------------------------------------------");
 	move(40,80);
 }
 /**
@@ -171,8 +206,10 @@ void imprimirMensaje(char mensaje[]){
 		8-> Full Color
 	}
 */
-void revolver(int** mesa, int codigoTrampa, int* cartasCongeladas){
+void revolver(int** mesa, int codigoTrampa, int* cartasCongeladas, bool segundaVez){
 	int* numeros = new int[5];
+	int** mesaActual = new int*[5];
+	copiarMatriz(mesaActual, mesa, 5, 2);
 	int	palo = rand() % 3 + 1;
 	//codigoTrampa
 	if(codigoTrampa >= 1 && codigoTrampa <= 3){
@@ -229,7 +266,7 @@ void revolver(int** mesa, int codigoTrampa, int* cartasCongeladas){
 			}else{
 				crearMapaTrebol(charCarta, i);
 			}
-		}while(sobreMesa(mesa, palo, numeroCarta) && (codigoTrampa == 0));
+		}while(sobreMesa(segundaVez ? mesaActual : mesa, palo, numeroCarta) && (codigoTrampa == 0));
 		propiedades[0] = palo;
 		propiedades[1] = numeroCarta;
 	}
@@ -349,6 +386,7 @@ int tieneJuego(int** mesa){
 			return 2;
 		}
 	}
+	addstr("INTENTA DE NUEVO");
 	return 0;
 }
 int hayPares(int** mesa){
